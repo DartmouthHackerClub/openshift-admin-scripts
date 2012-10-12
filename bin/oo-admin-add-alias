@@ -41,7 +41,7 @@ if args["--help"]
   exit 1
 end
 
-require "/var/www/openshift/broker/config/environment"
+require "/var/www/stickshift/broker/config/environment"
 # Disable analytics for admin scripts
 Rails.configuration.analytics[:enabled] = false
 
