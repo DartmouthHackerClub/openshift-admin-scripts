@@ -1,0 +1,95 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'getoptlong'
+
+def usage
+    puts <<USAGE
+== Synopsis
+
+oo-admin-add-alias: Add an alias without restriction. Use for deployment
+
+== Usage
+
+oo-admin-move OPTIONS
+
+Options:
+-a Application name
+--alias 
+USAGE
+end
+
+opts = GetoptLong.new(
+                      ["--user","-u",GetoptLong::REQUIRED_ARGUMENT],
+                      ["--application", "-a", GetoptLong::REQUIRED_ARGUMENT],
+                      ["--alias", GetoptLong::REQUIRED_ARGUMENT],
+                      ["--help", "-h", GetoptLong::NO_ARGUMENT]
+)
+
+args = {}
+begin
+    opts.each{ |k,v| args[k]=v }
+rescue GetoptLong::Error => e
+    usage
+    exit -100
+end
+login = args["--user"]
+appname = args["--application"]
+aliasname = args['--alias']
+if args["--help"]
+  usage
+  exit 1
+end
+
+require "/var/www/openshift/broker/config/environment"
+# Disable analytics for admin scripts
+Rails.configuration.analytics[:enabled] = false
+
+# Set the MCollective options
+#if timeout
+# Rails.configuration.msg_broker[:rpc_options][:timeout] = timeout.to_i
+#end
+
+
+user = CloudUser::find(login)
+
+if user.nil?
+    puts "Error: User '#{login}' not found"
+    exit 5
+end
+
+app = Application.find(user,appname)
+
+if  app.nil?
+  puts "ERROR: App not found: #{appname}. Did you specify the right user"
+  exit 1
+end
+ if !(server_alias =~ /\A[\w\-\.]+\z/)
+   puts "Invalid Server Alias '#{server_alias}' specified"
+   exit 2
+ end
+ self.aliases = [] unless self.aliases
+raise OpenShift::UserException.new("Alias '#{server_alias}' already exists for '#{@name}'", 255) if self.aliases.include? server_alias
+reply = ResultIO.new
+begin
+  self.aliases.push(server_alias)
+  self.save
+  reply.append self.container.add_alias(self, self.gear, self.framework, server_alias)
+rescue Exception => e
+  Rails.logger.debug e.message
+  Rails.logger.debug e.backtrace.inspect
+  reply.append self.container.remove_alias(self, self.gear, self.framework, server_alias)
+  self.aliases.delete(server_alias)
+  self.save
+  raise
+end
+puts reply
+
+puts "Everything should work now!"
+#if app.scalable and node_profile
+#  puts "Cannot specify 'node_profile' for a gear belonging to a scalable application."
+#  exit 1
+#end
+
+
+
